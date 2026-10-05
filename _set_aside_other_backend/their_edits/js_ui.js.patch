@@ -1,0 +1,33 @@
+--- /tmp/p5/disaster-lens/js/ui.js	2026-10-04 07:38:11.000000000 +0000
++++ js/ui.js	2026-10-04 14:37:59.949907000 +0000
+@@ -67,6 +67,12 @@
+   }
+   var LOGO = '<svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><rect width="32" height="32" rx="8" fill="currentColor"/><circle cx="16" cy="16" r="8.5" fill="none" stroke="#fff" stroke-width="2.6"/><circle cx="16" cy="16" r="3.2" fill="#fff"/></svg>';
+ 
++  /* run something that may answer at once (this device) or later (the server), and handle both the same way */
++  /* A stored photo is a path; it is swapped for a short-lived signed link by the cloud adapter. Photos picked on this device are data: links and show at once. */
++  var PIXEL = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
++  function src(x) { if (!x) return 'src="' + PIXEL + '"'; if (/^(data:|blob:|https?:)/.test(x)) return 'src="' + esc(x) + '"'; return 'src="' + PIXEL + '" data-path="' + esc(x) + '"'; }
++  function attempt(fn) { return new Promise(function (resolve, reject) { try { resolve(fn()); } catch (e) { reject(e); } }); }
++
+   /* ---------- Button ---------- */
+   function button(o) {
+     var cls = 'btn btn-' + (o.kind || 'secondary') + (o.block ? ' btn-block' : '') + (o.small ? ' btn-sm' : '') + (o.cls ? ' ' + o.cls : '');
+@@ -191,7 +197,7 @@
+   function reportCard(c, o) {
+     o = o || {};
+     var cat = S.cat(c.category);
+-    var thumb = c.imageUrlProof ? '<img class="rc-thumb" src="' + c.imageUrlProof + '" alt="" loading="lazy">' : '';
++    var thumb = c.imageUrlProof ? '<img class="rc-thumb" ' + src(c.imageUrlProof) + ' alt="" loading="lazy">' : '';
+     return '<li><a class="rc" href="' + (o.href || '#/c/' + c.id) + '">' + thumb +
+       '<div class="rc-main"><div class="rc-badges">' + urgentBadge(c) + statusBadge(c) + (o.admin ? modBadge(c, true) : '') + (o.mine ? checkBadge(c) : '') + (o.late !== false ? lateBadge(c) : '') + '</div>' +
+       '<h3 class="rc-title">' + esc(c.title) + '</h3>' +
+@@ -454,7 +460,7 @@
+ 
+   window.DL.ui = {
+     modBadge: modBadge, checkBadge: checkBadge, stars: stars, esc: esc, ago: ago, dateTime: dateTime, dateOnly: dateOnly, sameDay: sameDay, icon: icon, LOGO: LOGO,
+-    button: button, setBusy: setBusy, STATUS: STATUS, NEXT: NEXT, statusKey: statusKey, statusBadge: statusBadge, urgentBadge: urgentBadge, lateBadge: lateBadge,
++    src: src, attempt: attempt, button: button, setBusy: setBusy, STATUS: STATUS, NEXT: NEXT, statusKey: statusKey, statusBadge: statusBadge, urgentBadge: urgentBadge, lateBadge: lateBadge,
+     slaText: slaText, placeOf: placeOf, reportCard: reportCard, reportList: reportList, timeline: timeline, notificationItem: notificationItem,
+     emptyState: emptyState, loading: loading, field: field, showError: showError, clearErrors: clearErrors, focusFirstError: focusFirstError, opts: opts,
+     pageHeader: pageHeader, navItems: navItems, bottomNav: bottomNav, sidebar: sidebar, dialog: dialog, confirmDialog: confirmDialog,

@@ -1,0 +1,249 @@
+--- /tmp/p5/disaster-lens/js/views.js	2026-10-04 07:39:06.000000000 +0000
++++ js/views.js	2026-10-04 14:37:59.953368000 +0000
+@@ -296,17 +296,18 @@
+           if (draft.step < 4) { draft.step++; draw(); focusHead(); return; }
+           var next = bar.querySelector('#next');
+           if (next.disabled) return;
+-          U.setBusy(next, true, 'Submitting…');
+-          try {
+-            var c = S.createComplaint(ctx.me, { category: draft.cat, title: draft.title, description: draft.desc, address: draft.addr, state: draft.state, district: draft.district,
++          U.setBusy(next, true, draft.image ? 'Uploading photo…' : 'Submitting…');
++          U.attempt(function () {
++            return S.createComplaint(ctx.me, { category: draft.cat, title: draft.title, description: draft.desc, address: draft.addr, state: draft.state, district: draft.district,
+               city: draft.city, pincode: draft.pin, isAnonymous: draft.anon, image: draft.image, latitude: draft.coords ? draft.coords.lat : null, longitude: draft.coords ? draft.coords.lng : null });
++          }).then(function (c) {
+             draft = null;
+             location.hash = '#/c/' + c.id + '?new=1';
+-          } catch (ex) {
++          }).catch(function (ex) {
+             U.setBusy(next, false);
+             console.error(ex); S.sysLog('error', 'report', 'Report submit failed: ' + (ex && ex.message));
+             q('#submit-err').innerHTML = alertBox('danger', '<strong>Your report was not sent.</strong><p>' + esc(friendly(ex, 'Something went wrong while submitting your report. Please try again.')) + '</p>');
+-          }
++          });
+         });
+         draw();
+       }
+@@ -339,7 +340,7 @@
+     var banner = modNote + (ctx.query['new'] ? alertBox('good', '<strong>Report submitted</strong><p>The ' + esc(c.assignedDepartment) + ' has been told. You can follow it here, or in My reports.</p>') : '');
+     var status = '<section class="status tone-' + m.tone + '" aria-labelledby="st-h"><span class="status-ic">' + icon(m.icon) + '</span><div><h2 class="sr" id="st-h">Status: ' + m.label + '</h2><p class="status-lead">' + m[voice] + '</p>' +
+       '<p class="next">' + (official ? esc(U.slaText(c)) + '.' : '<strong>What happens next:</strong> ' + esc(U.NEXT[key](c))) + '</p></div></section>';
+-    var photo = c.imageUrlProof ? '<img class="photo" src="' + c.imageUrlProof + '" alt="Photo of the problem: ' + esc(c.title) + '">' : '';
++    var photo = c.imageUrlProof ? '<img class="photo" ' + U.src(c.imageUrlProof) + ' alt="Photo of the problem: ' + esc(c.title) + '">' : '';
+     var where = fullPlace(c);
+     var facts = '<dl class="facts"><div><dt>Category</dt><dd>' + esc(cat.name) + '</dd></div>' +
+       '<div><dt>Location</dt><dd>' + esc(where) + (c.latitude != null ? '<br><span class="muted small">GPS location saved</span>' : '') + locLine(c, me) + '</dd></div>' +
+@@ -349,7 +350,7 @@
+     var resolvedAt = 0; (c.timeline || []).forEach(function (t) { if (/^Marked resolved/.test(t.label)) resolvedAt = t.ts; });
+     var response = (c.authorityResponse || c.resolutionProofUrl)
+       ? '<section class="resp" aria-labelledby="resp-h"><h2 class="sec-h" id="resp-h">' + icon('check') + ' Official response</h2><p class="resp-by">' + esc(c.assignedDepartment) + (resolvedAt ? ' · ' + U.dateOnly(resolvedAt) : '') + '</p>' +
+-        '<p class="body">' + esc(c.authorityResponse) + '</p>' + (c.resolutionProofUrl ? '<img class="photo" src="' + c.resolutionProofUrl + '" alt="Photo of the finished work">' : '') + '</section>' : '';
++        '<p class="body">' + esc(c.authorityResponse) + '</p>' + (c.resolutionProofUrl ? '<img class="photo" ' + U.src(c.resolutionProofUrl) + ' alt="Photo of the finished work">' : '') + '</section>' : '';
+ 
+     var progress = sec('Progress', U.timeline(c));
+ 
+@@ -357,10 +358,10 @@
+     var disp = (c.disputes && c.disputes[0]) || null;
+     var disputeBox = disp && c.status === 'Reopened' && (owner || official)
+       ? '<section class="dispute" aria-labelledby="dp-h"><h2 class="sec-h" id="dp-h">' + icon('alert') + ' ' + (official ? 'The citizen says it is not fixed' : 'You said it is not fixed') + '</h2><p class="resp-by">' + esc(disp.reason) + ' · ' + U.dateOnly(disp.ts) + '</p>' +
+-        '<p class="body">' + esc(disp.note) + '</p>' + (disp.photo ? '<img class="photo" src="' + disp.photo + '" alt="Photo from the citizen">' : '') + '</section>' : '';
++        '<p class="body">' + esc(disp.note) + '</p>' + (disp.photo ? '<img class="photo" ' + U.src(disp.photo) + ' alt="Photo from the citizen">' : '') + '</section>' : '';
+     var earlier = (c.resolutions && c.resolutions.length && (owner || official || (me && me.role === 'admin')))
+       ? '<details class="earlier"><summary>Earlier attempts (' + c.resolutions.length + ')</summary>' + c.resolutions.map(function (r) {
+-        return '<div class="earlier-i"><p class="resp-by">' + esc(S.deptName(r.deptId)) + ' · ' + U.dateOnly(r.ts) + '</p><p class="body">' + esc(r.response) + '</p>' + (r.proof ? '<img class="photo" src="' + r.proof + '" alt="Photo of the earlier work">' : '') +
++        return '<div class="earlier-i"><p class="resp-by">' + esc(S.deptName(r.deptId)) + ' · ' + U.dateOnly(r.ts) + '</p><p class="body">' + esc(r.response) + '</p>' + (r.proof ? '<img class="photo" ' + U.src(r.proof) + ' alt="Photo of the earlier work">' : '') +
+           '<p class="muted small">The citizen said: ' + esc(r.disputedReason) + '. ' + esc(r.disputedNote) + '</p></div>'; }).join('') + '</details>' : '';
+     var ratingBox = c.audit && c.audit.state === 'confirmed' && (owner || official || (me && me.role === 'admin'))
+       ? '<section class="rated"><h2 class="sec-h">' + icon('check') + ' ' + (owner ? 'You confirmed the fix' : 'The citizen confirmed the fix') + '</h2><p>' + U.stars(c.audit.rating) + '</p>' + (c.audit.comment ? '<p class="body">' + esc(c.audit.comment) + '</p>' : '') + '</section>'
+@@ -407,8 +408,10 @@
+         var up = root.querySelector('#a-up');
+         if (up) up.addEventListener('click', function () {
+           if (!me) return need();
+-          var r = S.toggleUpvote(me, c.id);
+-          up.querySelector('span').textContent = 'Upvote · ' + r.count; up.classList.toggle('is-on', r.voted); up.setAttribute('aria-pressed', r.voted);
++          up.disabled = true;
++          U.attempt(function () { return S.toggleUpvote(me, c.id); }).then(function (r) {
++            up.disabled = false; up.querySelector('span').textContent = 'Upvote · ' + r.count; up.classList.toggle('is-on', r.voted); up.setAttribute('aria-pressed', r.voted);
++          }).catch(function (ex) { up.disabled = false; U.toast(friendly(ex, 'We could not save your upvote. Please try again.'), 'bad'); });
+         });
+         var sh = root.querySelector('#a-share');
+         if (sh) sh.addEventListener('click', function () {
+@@ -422,8 +425,9 @@
+           e.preventDefault(); U.clearErrors(cf);
+           var t = root.querySelector('#cm-t');
+           if (!t.value.trim()) { U.showError(cf, 'cm-t', 'Write something first.'); t.focus(); return; }
+-          S.addComment(me, c.id, t.value);
+-          rerender(); U.toast('Comment posted', 'good');
++          var pb = cf.querySelector('button[type=submit]'); U.setBusy(pb, true, 'Posting…');
++          U.attempt(function () { return S.addComment(me, c.id, t.value); }).then(function () { rerender(); U.toast('Comment posted', 'good'); })
++            .catch(function (ex) { U.setBusy(pb, false); U.showError(cf, 'cm-t', friendly(ex, 'We could not post your comment. Please try again.')); });
+         });
+ 
+         var fx = root.querySelector('#a-fixed'); if (fx) fx.addEventListener('click', function () { openConfirmFix(c, me, rerender); });
+@@ -434,8 +438,8 @@
+         var st = root.querySelector('#a-start');
+         if (st) st.addEventListener('click', function () {
+           U.setBusy(st, true, 'Starting…');
+-          try { S.startWork(me, c.id); done('Work started. The citizen has been told.'); }
+-          catch (ex) { U.setBusy(st, false); U.toast(friendly(ex, 'Could not start work. Please try again.'), 'bad'); }
++          U.attempt(function () { return S.startWork(me, c.id); }).then(function () { done('Work started. The citizen has been told.'); })
++            .catch(function (ex) { U.setBusy(st, false); U.toast(friendly(ex, 'Could not start work. Please try again.'), 'bad'); });
+         });
+         var rs = root.querySelector('#a-resolve');
+         if (rs) rs.addEventListener('click', function () { openResolve(c, me, done); });
+@@ -463,8 +467,9 @@
+           var r = root.querySelector('input[name=rt]:checked');
+           if (!r) { var er = root.querySelector('#rt-err'); er.textContent = 'Choose a rating from 1 to 5.'; er.hidden = false; return; }
+           var go = root.querySelector('#cf-go'); U.setBusy(go, true, 'Saving…');
+-          try { S.confirmFix(me, c.id, { rating: r.value, comment: root.querySelector('#cf-c').value }); close(); U.toast('Thank you. The report is closed.', 'good'); done(); }
+-          catch (ex) { U.setBusy(go, false); var e2 = root.querySelector('#rt-err'); e2.textContent = friendly(ex, 'We could not save this. Please try again.'); e2.hidden = false; }
++          U.attempt(function () { return S.confirmFix(me, c.id, { rating: r.value, comment: root.querySelector('#cf-c').value }); })
++            .then(function () { close(); U.toast('Thank you. The report is closed.', 'good'); done(); })
++            .catch(function (ex) { U.setBusy(go, false); var e2 = root.querySelector('#rt-err'); e2.textContent = friendly(ex, 'We could not save this. Please try again.'); e2.hidden = false; });
+         });
+       }
+     });
+@@ -491,9 +496,10 @@
+           e.preventDefault(); U.clearErrors(root);
+           var note = root.querySelector('#ds-n').value;
+           if (note.trim().length < 5) { U.showError(root, 'ds-n', 'Tell the department what is still wrong, at least 5 letters.'); root.querySelector('#ds-n').focus(); return; }
+-          var go = root.querySelector('#ds-go'); U.setBusy(go, true, 'Reopening…');
+-          try { S.disputeFix(me, c.id, { reasonId: root.querySelector('input[name=dr]:checked').value, note: note, photo: photo }); close(); U.toast('The report was reopened. The department has been told.', 'good'); done(); }
+-          catch (ex) { U.setBusy(go, false); U.showError(root, 'ds-n', friendly(ex, 'We could not reopen this report. Please try again.')); }
++          var go = root.querySelector('#ds-go'); U.setBusy(go, true, photo ? 'Uploading photo…' : 'Reopening…');
++          U.attempt(function () { return S.disputeFix(me, c.id, { reasonId: root.querySelector('input[name=dr]:checked').value, note: note, photo: photo }); })
++            .then(function () { close(); U.toast('The report was reopened. The department has been told.', 'good'); done(); })
++            .catch(function (ex) { U.setBusy(go, false); U.showError(root, 'ds-n', friendly(ex, 'We could not reopen this report. Please try again.')); });
+         });
+       }
+     });
+@@ -515,8 +521,9 @@
+           var r = root.querySelector('input[name=fr]:checked');
+           if (!r) { var er = root.querySelector('#fr-err'); er.textContent = 'Choose a reason.'; er.hidden = false; return; }
+           var go = root.querySelector('#fg-go'); U.setBusy(go, true, 'Sending…');
+-          try { var res = S.flagComplaint(me, c.id, r.value, root.querySelector('#fg-n').value); close(); U.toast(res.toReview ? 'Thanks. An admin will review this report.' : 'Thanks. Your flag was sent to the admins.', 'good'); done(); }
+-          catch (ex) { U.setBusy(go, false); var e2 = root.querySelector('#fr-err'); e2.textContent = friendly(ex, 'We could not send your flag. Please try again.'); e2.hidden = false; }
++          U.attempt(function () { return S.flagComplaint(me, c.id, r.value, root.querySelector('#fg-n').value); })
++            .then(function (res) { close(); U.toast(res.toReview ? 'Thanks. An admin will review this report.' : 'Thanks. Your flag was sent to the admins.', 'good'); done(); })
++            .catch(function (ex) { U.setBusy(go, false); var e2 = root.querySelector('#fr-err'); e2.textContent = friendly(ex, 'We could not send your flag. Please try again.'); e2.hidden = false; });
+         });
+       }
+     });
+@@ -549,9 +556,10 @@
+           if (note.trim().length < 10) { U.showError(root, 'rv-t', 'Describe the work in at least 10 letters.'); ok = false; }
+           if (!proof) { U.showError(root, 'rv-img', 'Add a photo of the finished work.'); ok = false; }
+           if (!ok) { U.focusFirstError(root); return; }
+-          var go = root.querySelector('#rv-go'); U.setBusy(go, true, 'Resolving…');
+-          try { S.resolve(me, c.id, { response: note, proof: proof }); close(); done('Marked as resolved. The citizen can see your note and photo.'); }
+-          catch (ex) { U.setBusy(go, false); U.showError(root, 'rv-t', friendly(ex, 'Could not mark this as resolved. Please try again.')); }
++          var go = root.querySelector('#rv-go'); U.setBusy(go, true, 'Uploading photo…');
++          U.attempt(function () { return S.resolve(me, c.id, { response: note, proof: proof }); })
++            .then(function () { close(); done('Marked as resolved. The citizen can see your note and photo.'); })
++            .catch(function (ex) { U.setBusy(go, false); U.showError(root, 'rv-t', friendly(ex, 'Could not mark this as resolved. Please try again.')); });
+         });
+       }
+     });
+@@ -574,12 +582,12 @@
+           e.preventDefault(); U.clearErrors(root);
+           if (root.querySelector('#tf-r').value.trim().length < 5) { U.showError(root, 'tf-r', 'Say why it is being transferred.'); U.focusFirstError(root); return; }
+           var go = root.querySelector('#tf-go'); U.setBusy(go, true, 'Transferring…');
+-          try {
+-            var to = S.deptName(sel.value);
+-            S.transfer(me, c.id, sel.value, root.querySelector('#tf-r').value); close();
++          var to = S.deptName(sel.value);
++          U.attempt(function () { return S.transfer(me, c.id, sel.value, root.querySelector('#tf-r').value); }).then(function () {
++            close();
+             U.toast('Report transferred to the ' + to + '.', 'good');
+             if (me.role === 'official') location.hash = '#/desk'; else window.DL.app.render();
+-          } catch (ex) { U.setBusy(go, false); U.showError(root, 'tf-r', friendly(ex, 'Could not transfer this report. Please try again.')); }
++          }).catch(function (ex) { U.setBusy(go, false); U.showError(root, 'tf-r', friendly(ex, 'Could not transfer this report. Please try again.')); });
+         });
+       }
+     });
+@@ -593,8 +601,8 @@
+         U.clearErrors(root);
+         if (root.querySelector('#es-r').value.trim().length < 5) { U.showError(root, 'es-r', 'Say why this needs escalation.'); root.querySelector('#es-r').focus(); return; }
+         var ok = root.querySelector('#dlg-ok'); U.setBusy(ok, true, 'Escalating…');
+-        try { S.escalate(me, c.id, root.querySelector('#es-r').value); close(); done('Report escalated to the district administration.'); }
+-        catch (ex) { U.setBusy(ok, false); U.showError(root, 'es-r', friendly(ex, 'Could not escalate this report. Please try again.')); }
++        U.attempt(function () { return S.escalate(me, c.id, root.querySelector('#es-r').value); }).then(function () { close(); done('Report escalated to the district administration.'); })
++          .catch(function (ex) { U.setBusy(ok, false); U.showError(root, 'es-r', friendly(ex, 'Could not escalate this report. Please try again.')); });
+       }
+     });
+   }
+@@ -631,8 +639,9 @@
+         list.addEventListener('click', function (e) {
+           var b = e.target.closest('[data-start]'); if (!b || b.disabled) return;
+           U.setBusy(b, true, 'Starting…');
+-          try { var id = b.getAttribute('data-start'); S.startWork(me, id); U.toast('Work started. The citizen has been told.', 'good'); location.hash = '#/c/' + id; }
+-          catch (ex) { U.setBusy(b, false); U.toast(friendly(ex, 'Could not start work. Please try again.'), 'bad'); }
++          var id = b.getAttribute('data-start');
++          U.attempt(function () { return S.startWork(me, id); }).then(function () { U.toast('Work started. The citizen has been told.', 'good'); location.hash = '#/c/' + id; })
++            .catch(function (ex) { U.setBusy(b, false); U.toast(friendly(ex, 'Could not start work. Please try again.'), 'bad'); });
+         });
+       }
+     };
+@@ -669,8 +678,13 @@
+         '<dl class="facts"><div><dt>Name</dt><dd>' + esc(me.name) + '</dd></div><div><dt>Email</dt><dd>' + esc(me.email) + '</dd></div>' +
+         (me.phone ? '<div><dt>Mobile</dt><dd>' + esc(me.phone) + '</dd></div>' : '') +
+         '<div><dt>Account</dt><dd>' + esc(role) + '</dd></div>' + (me.role === 'citizen' ? '<div><dt>Standing</dt><dd>' + esc(S.accountOf(me).status === 'suspended' ? 'Suspended until ' + U.dateOnly(S.accountOf(me).until) : 'Active') + '</dd></div>' : '') + '<div><dt>Location</dt><dd>' + esc([me.city, me.district, me.state].filter(Boolean).join(', ')) + '</dd></div></dl>' +
+-        '<div class="stack-col">' + btn({ label: 'About Disaster Lens', href: '#/about', icon: 'info', block: true }) + btn({ label: 'Log out', id: 'p-logout', icon: 'logout', block: true }) + '</div>', 'narrow'),
+-      mount: function (root) { root.querySelector('#p-logout').addEventListener('click', function () { window.DL.app.logout(); }); }
++        '<div class="stack-col">' + (S.isCloud() ? btn({ label: 'Edit my details', id: 'p-edit', icon: 'user', block: true }) + btn({ label: 'Change password', id: 'p-pw', icon: 'shield', block: true }) : '') +
++        btn({ label: 'About Disaster Lens', href: '#/about', icon: 'info', block: true }) + btn({ label: 'Log out', id: 'p-logout', icon: 'logout', block: true }) + '</div>', 'narrow'),
++      mount: function (root) {
++        root.querySelector('#p-logout').addEventListener('click', function () { window.DL.app.logout(); });
++        var e1 = root.querySelector('#p-edit'); if (e1) e1.addEventListener('click', function () { window.DL.accountViews.openEditProfile(me); });
++        var e2 = root.querySelector('#p-pw'); if (e2) e2.addEventListener('click', function () { window.DL.accountViews.openChangePassword(); });
++      }
+     };
+   }
+ 
+@@ -693,10 +707,12 @@
+       html: wrap(U.pageHeader({ title: 'Log in' }) +
+         '<form id="lf" class="form" novalidate>' + U.field({ id: 'l-em', label: 'Email', type: 'email', required: true, attrs: 'autocomplete="email"' }) +
+         U.field({ id: 'l-pw', label: 'Password', type: 'password', required: true, attrs: 'autocomplete="current-password"' }) +
++        '<div class="pw-row"><label class="check-inline"><input type="checkbox" id="l-show"><span>Show password</span></label>' + (S.isCloud() ? '<a class="link" href="#/forgot">Forgot password?</a>' : '') + '</div>' +
+         '<div id="l-alert"></div>' + btn({ label: 'Log in', type: 'submit', kind: 'primary', block: true, id: 'l-go', cls: 'btn-lg' }) + '</form>' +
+         '<p class="alt">New here? <a class="link" href="#/signup">Create an account</a></p>' +
+         (S.hasAdmin() || S.isDemo() ? '' : alertBox('info', '<strong>No administrator yet.</strong><p>' + btn({ label: 'Set up the administrator', href: '#/setup', small: true }) + '</p>')), 'narrow'),
+       mount: function (root) {
++        root.querySelector('#l-show').addEventListener('change', function (ev) { root.querySelector('#l-pw').type = ev.target.checked ? 'text' : 'password'; });
+         root.querySelector('#lf').addEventListener('submit', function (e) {
+           e.preventDefault(); U.clearErrors(root); root.querySelector('#l-alert').innerHTML = '';
+           var em = root.querySelector('#l-em').value, pw = root.querySelector('#l-pw').value, ok = true;
+@@ -725,7 +741,8 @@
+         U.field({ id: 's-name', label: 'Full name', required: true, attrs: 'autocomplete="name"' }) +
+         U.field({ id: 's-em', label: 'Email', type: 'email', required: true, attrs: 'autocomplete="email"' }) +
+         U.field({ id: 's-ph', label: 'Mobile number', attrs: 'inputmode="numeric" maxlength="10" autocomplete="tel-national"' }) +
+-        U.field({ id: 's-pw', label: 'Password', type: 'password', required: true, hint: 'At least 8 characters.', attrs: 'autocomplete="new-password"' }) +
++        U.field({ id: 's-pw', label: 'Password', type: 'password', required: true, hint: 'At least 8 characters. A mix of letters and numbers is best.', attrs: 'autocomplete="new-password"' }) +
++        '<label class="check-inline"><input type="checkbox" id="s-show"><span>Show password</span></label>' +
+         U.field({ id: 's-state', label: 'State', tag: 'select', required: true, optionsHtml: stateOpts('') }) +
+         '<div class="two">' + U.field({ id: 's-dist', label: 'District', required: true }) + U.field({ id: 's-city', label: 'City or town', required: true }) + '</div>' +
+         U.field({ id: 's-pin', label: 'Pincode', attrs: 'inputmode="numeric" maxlength="6"' }) +
+@@ -737,6 +754,7 @@
+       mount: function (root) {
+         var f = function (s) { return root.querySelector(s); };
+         var roleVal = function () { return root.querySelector('input[name=role]:checked').value; };
++        f('#s-show').addEventListener('change', function (ev) { f('#s-pw').type = ev.target.checked ? 'text' : 'password'; });
+         root.querySelectorAll('input[name=role]').forEach(function (r) { r.addEventListener('change', function () { f('#auth-only').hidden = roleVal() !== 'official'; }); });
+         f('#sf').addEventListener('submit', function (e) {
+           e.preventDefault(); U.clearErrors(root); f('#s-alert').innerHTML = '';
+@@ -756,6 +774,16 @@
+           if (!ok) { U.focusFirstError(root); return; }
+           var go = f('#s-go'); U.setBusy(go, true, 'Creating account…');
+           S.register(d).then(function (u) {
++            if (u && u.needsConfirm) {
++              root.innerHTML = '<div class="panel center">' + U.emptyState({ icon: 'inbox', title: 'Check your email', text: 'We sent a link to ' + u.email + '. Open it to confirm your account, then log in.',
++                action: '<div class="stack-col">' + btn({ label: 'Resend the email', id: 'rs-mail', block: true }) + btn({ label: 'Go to log in', href: '#/login', kind: 'primary', block: true }) + '</div><p class="muted small" id="rs-out" role="status"></p>' }) + '</div>';
++              root.querySelector('#rs-mail').addEventListener('click', function (ev) {
++                var b = ev.currentTarget; U.setBusy(b, true, 'Sending…');
++                U.attempt(function () { return S.resendConfirmation(u.email); }).then(function () { U.setBusy(b, false); root.querySelector('#rs-out').textContent = 'Sent again. It can take a minute to arrive. Check your spam folder too.'; })
++                  .catch(function (ex) { U.setBusy(b, false); root.querySelector('#rs-out').textContent = friendly(ex, 'We could not send it. Please try again.'); });
++              });
++              return;
++            }
+             if (u.role === 'official') { U.toast('Application sent. An admin will check your ID.', 'good'); location.hash = '#/verification'; }
+             else { U.toast('Account created', 'good'); location.hash = '#/'; }
+           }).catch(function (ex) {

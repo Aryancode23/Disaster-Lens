@@ -1,0 +1,19 @@
+--- /tmp/p5/disaster-lens/css/style.css	2026-10-04 08:16:18.000000000 +0000
++++ css/style.css	2026-10-04 14:17:11.624479000 +0000
+@@ -409,3 +409,16 @@
+   .mapsearch { flex-wrap: nowrap; } .mapsearch input { flex: 1 1 auto; }
+   .mapwrap { gap: 8px; } .mapbox { height: min(58vh, 460px); }
+ }
++
++/* ================= Phase 6: online mode, sign-in and live updates ================= */
++.conn { display: inline-flex; align-items: center; gap: 6px; font-size: .8125rem; font-weight: 600; padding: 4px 10px; border-radius: 14px; background: var(--neutral-bg); color: var(--neutral); white-space: nowrap; }
++.conn i { width: 9px; height: 9px; border-radius: 50%; background: currentColor; display: inline-block; }
++.conn-live { background: var(--good-bg); color: var(--good); } .conn-live i { animation: pulse 2s ease-in-out infinite; }
++.conn-sync { background: var(--info-bg); color: var(--info); } .conn-off { background: var(--warn-bg); color: var(--warn); } .conn-off i { border-radius: 2px; }
++@keyframes pulse { 50% { opacity: .35; } }
++.top-in .conn { margin-left: auto; } .top-in .conn + .top-act { margin-left: 0; }
++.fresh-pill { position: fixed; left: 50%; transform: translateX(-50%); bottom: 84px; z-index: 60; } .fresh-pill[hidden] { display: none; }
++@media (min-width: 900px) { .fresh-pill { bottom: 28px; } .has-sidebar .conn { display: none; } }
++.pw-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; min-height: 44px; }
++.check-inline { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; font-weight: 500; cursor: pointer; } .check-inline input { width: 22px; height: 22px; min-height: 0; accent-color: var(--primary); }
++.code { background: #0F1B26; color: #E6EEF5; padding: 14px; border-radius: var(--r); overflow-x: auto; font: 500 .9375rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; margin: 16px 0; white-space: pre-wrap; word-break: break-all; }

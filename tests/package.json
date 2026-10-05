@@ -1,0 +1,1 @@
+{ "name": "disaster-lens-tests", "private": true, "dependencies": { "@electric-sql/pglite": "^0.3.0", "@supabase/supabase-js": "^2.117.2" } }

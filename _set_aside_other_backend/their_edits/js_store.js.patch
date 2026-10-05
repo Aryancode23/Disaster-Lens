@@ -1,0 +1,101 @@
+--- /tmp/p5/disaster-lens/js/store.js	2026-10-04 07:34:43.000000000 +0000
++++ js/store.js	2026-10-04 14:38:08.304682000 +0000
+@@ -85,6 +85,7 @@
+   }
+ 
+   var db = null;
++  var CLOUD = null;   // the online backend (js/cloud.js) when it is configured; otherwise everything runs on this device
+   var subtle = (window.crypto && window.crypto.subtle) || null;
+ 
+   /* ---------- helpers ---------- */
+@@ -121,7 +122,7 @@
+   function sKey() { return mode() === 'demo' ? 'dl_session_demo' : 'dl_session_real'; }
+   function isDemo() { return mode() === 'demo'; }
+ 
+-  function save() { try { db.updatedAt = now(); db.rev = (db.rev || 0) + 1; localStorage.setItem(dbKey(), JSON.stringify(db)); return true; } catch (e) { return false; } }
++  function save() { if (CLOUD) return true; try { db.updatedAt = now(); db.rev = (db.rev || 0) + 1; localStorage.setItem(dbKey(), JSON.stringify(db)); return true; } catch (e) { return false; } }
+ 
+   function deptName(id) { var d = dept(id); return d ? d.name : 'Unknown department'; }
+   function dept(id) { for (var i = 0; i < db.departments.length; i++) if (db.departments[i].id === id) return db.departments[i]; return null; }
+@@ -200,6 +201,7 @@
+   function isApproved(u) { return !!u && u.role === 'official' && !!u.verification && u.verification.status === 'approved'; }
+ 
+   function sessionUser() {
++    if (CLOUD) return CLOUD.user();
+     if (!db) return null;
+     var id = localStorage.getItem(sKey());
+     if (!id) return null;
+@@ -328,6 +330,11 @@
+   }
+ 
+   function init() {
++    if (mode() === 'real' && window.DL.cloud && window.DL.cloud.enabled()) {
++      CLOUD = window.DL.cloud;
++      return CLOUD.init({ store: window.DL.store, setDb: function (d) { db = d; hydrateAll(); } });
++    }
++    CLOUD = null;
+     // Anything created by older test builds is kept, but only inside Demo mode, never in the real database.
+     var oldRaw = localStorage.getItem(OLD_KEY);
+     if (oldRaw && !localStorage.getItem('dl_demo_v2')) {
+@@ -417,7 +424,9 @@
+ 
+   /* ---------- reports ---------- */
+   function authorName(c) {
++    if (c.authorLabel) return c.authorLabel;
+     if (c.isAnonymous) return 'Anonymous citizen';
++    if (c.authorName !== undefined) return c.authorName || 'Citizen';
+     var u = findUser(c.citizenId);
+     return u ? u.name : 'Citizen';
+   }
+@@ -1143,6 +1152,10 @@
+       var a = areaGuess(c); return a ? { lat: a.lat, lng: a.lng, quality: 'area' } : null;
+     }
+     if (priv === 'hidden') return null;
++    if (c.hasGps !== undefined && !g) {                       // online mode: the server already moved the point; the exact one never reaches this browser
++      if (c.hasGps && c.pubLat != null && G.valid(c.pubLat, c.pubLng)) return { lat: c.pubLat, lng: c.pubLng, quality: priv === 'exact' ? 'exact' : 'approx' };
++      if (c.hasGps) return null;
++    }
+     if (g) {
+       if (priv === 'exact') return { lat: g.lat, lng: g.lng, quality: 'exact' };
+       var sn = G.snap(g.lat, g.lng, db.settings.publicGridMeters * (c.isAnonymous ? 2 : 1));
+@@ -1361,6 +1374,11 @@
+   function markAllRead(userId) { notificationsFor(userId).forEach(function (n) { n.isRead = true; }); save(); }
+   function markRead(userId, id) { notificationsFor(userId).forEach(function (n) { if (n.id === id) n.isRead = true; }); save(); }
+ 
++  /* In cloud mode these hand the work to the server; on this device they run the local rules as before. */
++  var MUTATORS = ['createComplaint', 'toggleUpvote', 'addComment', 'flagComplaint', 'startWork', 'resolve', 'transfer', 'escalate', 'confirmFix', 'disputeFix',
++    'keepReport', 'markUnderReview', 'rejectReport', 'markDuplicate', 'archiveReport', 'restoreReport', 'setLocationPrivacy', 'warnUser', 'suspendUser', 'banUser', 'reinstateUser',
++    'approveAuthority', 'rejectAuthority', 'requestInfo', 'suspendAuthority', 'reinstateAuthority', 'submitVerificationInfo', 'saveDepartment', 'setCategoryDept', 'saveSettings', 'markAllRead', 'markRead'];
++
+   window.DL = window.DL || {};
+   window.DL.store = {
+     CATS: CATS, STATES: STATES, STATUSES: STATUSES, FLAG_REASONS: FLAG_REASONS, REJECT_OUTCOMES: REJECT_OUTCOMES, MOD_LABELS: MOD_LABELS, ROLE_LABELS: ROLE_LABELS,
+@@ -1383,4 +1401,28 @@
+     auditList: auditList, auditVerify: auditVerify, sysLog: sysLog, sysList: sysList, notifList: notifList,
+     notificationsFor: notificationsFor, unreadCount: unreadCount, markAllRead: markAllRead, markRead: markRead
+   };
++
++  var API = window.DL.store;
++  API._emptyDb = emptyDb;
++  API.isCloud = function () { return !!CLOUD; };
++  MUTATORS.forEach(function (n) {
++    var local = API[n];
++    API[n] = function () { if (CLOUD && CLOUD.impl[n]) return CLOUD.impl[n].apply(null, arguments); return local.apply(this, arguments); };
++  });
++  (function () {
++    var l = { register: API.register, login: API.login, logout: API.logout, setupAdmin: API.setupAdmin, hasAdmin: API.hasAdmin, sysLog: API.sysLog, auditVerify: API.auditVerify, sweepAudits: API.sweepAudits };
++    API.register = function (f) { return CLOUD ? CLOUD.register(f) : l.register(f); };
++    API.login = function (e, p) { return CLOUD ? CLOUD.login(e, p) : l.login(e, p); };
++    API.logout = function () { return CLOUD ? CLOUD.logout() : l.logout(); };
++    API.setupAdmin = function (f) { return CLOUD ? Promise.reject(E('In online mode the first administrator is created from the database. See the setup page.')) : l.setupAdmin(f); };
++    API.hasAdmin = function () { return CLOUD ? CLOUD.hasAdmin() : l.hasAdmin(); };
++    API.sysLog = function (a, b, c, d) { if (CLOUD) return CLOUD.impl.sysLog(a, b, c); return l.sysLog(a, b, c, d); };
++    API.auditVerify = function () { if (CLOUD) { need('admin.logs'); return CLOUD.auditStatus(); } return l.auditVerify(); };
++    API.sweepAudits = function () { return CLOUD ? false : l.sweepAudits(); };
++    API.resetPassword = function (e) { return CLOUD ? CLOUD.resetPassword(e) : Promise.reject(E('Password reset by email needs the online backend.')); };
++    API.setPassword = function (p) { return CLOUD ? CLOUD.setPassword(p) : Promise.reject(E('Changing the password needs the online backend.')); };
++    API.resendConfirmation = function (e) { return CLOUD ? CLOUD.resendConfirmation(e) : Promise.reject(E('This needs the online backend.')); };
++    API.updateProfile = function (f) { return CLOUD ? CLOUD.impl.updateProfile(f) : Promise.reject(E('Editing the profile needs the online backend.')); };
++    API.cloudStatus = function () { return CLOUD ? CLOUD.status() : 'local'; };
++  })();
+ })();

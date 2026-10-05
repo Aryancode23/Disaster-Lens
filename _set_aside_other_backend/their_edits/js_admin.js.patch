@@ -1,0 +1,127 @@
+--- /tmp/p5/disaster-lens/js/admin.js	2026-10-04 07:39:06.000000000 +0000
++++ js/admin.js	2026-10-04 14:37:59.971249000 +0000
+@@ -69,8 +69,8 @@
+           var reason = root.querySelector('#rd-r').value;
+           if (reason.trim().length < 5) { U.showError(root, 'rd-r', 'Write a reason of at least 5 characters.'); root.querySelector('#rd-r').focus(); return; }
+           var go = root.querySelector('#rd-go'); U.setBusy(go, true, o.busy || 'Saving…');
+-          try { o.run(reason, root); close(); U.toast(o.done, 'good'); (o.after || rerender)(); }
+-          catch (ex) { U.setBusy(go, false); U.showError(root, o.errId || 'rd-r', friendly(ex, 'This could not be saved. Please try again.')); }
++          U.attempt(function () { return o.run(reason, root); }).then(function () { close(); U.toast(o.done, 'good'); (o.after || rerender)(); })
++            .catch(function (ex) { U.setBusy(go, false); U.showError(root, o.errId || 'rd-r', friendly(ex, 'This could not be saved. Please try again.')); });
+         });
+       }
+     });
+@@ -144,23 +144,23 @@
+     reasonDialog({ title: 'Reject this report', text: 'The report leaves the active workload, public lists and all statistics. It stays in the audit record. The reporter is told.', confirm: 'Reject report', danger: true,
+       extra: '<fieldset class="radios"><legend>Why is it rejected?</legend>' + S.REJECT_OUTCOMES.map(function (o, i) { return '<label class="radio"><input type="radio" name="oc" value="' + o.id + '"' + (i === 0 ? ' checked' : '') + '><span>' + o.label + '</span></label>'; }).join('') +
+         '<p class="hint">Only "Fake report" and "Spam" lower the reporter\'s trust.</p></fieldset>',
+-      run: function (reason, root) { S.rejectReport(c.id, root.querySelector('input[name=oc]:checked').value, reason); }, done: 'Report rejected. The reporter was told.' });
++      run: function (reason, root) { return S.rejectReport(c.id, root.querySelector('input[name=oc]:checked').value, reason); }, done: 'Report rejected. The reporter was told.' });
+   }
+   function openDuplicate(c) {
+     reasonDialog({ title: 'Mark as duplicate', text: 'The original stays as it is. This report is linked to it and leaves the active workload.', confirm: 'Mark as duplicate',
+       extra: U.field({ id: 'dp-o', label: 'Original report number', required: true, hint: 'The number after DL-, for example 12.', attrs: 'inputmode="numeric"' }),
+-      errId: 'dp-o', run: function (reason, root) { S.markDuplicate(c.id, root.querySelector('#dp-o').value, reason); }, done: 'Linked as a duplicate.' });
++      errId: 'dp-o', run: function (reason, root) { return S.markDuplicate(c.id, root.querySelector('#dp-o').value, reason); }, done: 'Linked as a duplicate.' });
+   }
+   function openUserAction(kind, u, after) {
+     var cfg = {
+-      warn: { title: 'Send a warning', text: 'The citizen gets a notification with your reason. Their access does not change.', confirm: 'Send warning', done: 'Warning sent.', run: function (r) { S.warnUser(u.id, r); } },
++      warn: { title: 'Send a warning', text: 'The citizen gets a notification with your reason. Their access does not change.', confirm: 'Send warning', done: 'Warning sent.', run: function (r) { return S.warnUser(u.id, r); } },
+       suspend: { title: 'Suspend this citizen', text: 'They keep their old reports but cannot post, comment or flag until the date ends. Only suspend when there is evidence of abuse.', confirm: 'Suspend', danger: true, done: 'Citizen suspended.',
+         extra: U.field({ id: 'sp-d', label: 'For how long', tag: 'select', required: true, optionsHtml: [1, 3, 7, 14, 30, 90].map(function (d) { return '<option value="' + d + '"' + (d === 7 ? ' selected' : '') + '>' + d + (d === 1 ? ' day' : ' days') + '</option>'; }).join('') }),
+-        run: function (r, root) { S.suspendUser(u.id, root.querySelector('#sp-d').value, r); } },
++        run: function (r, root) { return S.suspendUser(u.id, root.querySelector('#sp-d').value, r); } },
+       ban: { title: 'Ban this citizen permanently', text: 'They will not be able to log in again unless you reinstate them. This is the strongest action, so please be sure.', confirm: 'Ban permanently', danger: true, done: 'Citizen banned.',
+         extra: U.field({ id: 'bn-c', label: 'Type BAN to confirm', required: true, attrs: 'autocomplete="off"' }), errId: 'bn-c',
+-        run: function (r, root) { S.banUser(u.id, r, root.querySelector('#bn-c').value.trim()); } },
+-      reinstate: { title: 'Restore this account', text: 'The citizen can use the site normally again.', confirm: 'Restore account', done: 'Account restored.', run: function (r) { S.reinstateUser(u.id, r); } }
++        run: function (r, root) { return S.banUser(u.id, r, root.querySelector('#bn-c').value.trim()); } },
++      reinstate: { title: 'Restore this account', text: 'The citizen can use the site normally again.', confirm: 'Restore account', done: 'Account restored.', run: function (r) { return S.reinstateUser(u.id, r); } }
+     }[kind];
+     reasonDialog({ title: cfg.title, text: cfg.text, confirm: cfg.confirm, danger: cfg.danger, extra: cfg.extra, errId: cfg.errId, done: cfg.done, run: cfg.run, after: after });
+   }
+@@ -213,8 +213,8 @@
+       html: wrap('<header class="ph ph-detail"><a class="ph-back" href="#/admin/reports">' + icon('left') + '<span>Reports</span></a><h1 id="page-title" tabindex="-1">' + esc(c.title) + '</h1>' +
+         '<div class="rc-badges">' + U.urgentBadge(c) + U.statusBadge(c, true) + U.modBadge(c, true) + (ms !== 'normal' && ms !== 'flagged' && ms !== 'verified' ? '<span class="badge tone-neutral">' + icon('eye') + '<span>' + S.MOD_LABELS[ms] + '</span></span>' : '') + U.lateBadge(c) + '</div></header>' +
+         intro +
+-        sec('Report', facts + '<p class="body">' + esc(c.description) + '</p>' + (c.imageUrlProof ? '<img class="photo" src="' + c.imageUrlProof + '" alt="Photo sent with the report">' : '') +
+-          (c.resolutionProofUrl ? '<h3 class="sub-h">Photo of the finished work</h3><img class="photo" src="' + c.resolutionProofUrl + '" alt="Photo of the finished work">' : '') +
++        sec('Report', facts + '<p class="body">' + esc(c.description) + '</p>' + (c.imageUrlProof ? '<img class="photo" ' + U.src(c.imageUrlProof) + ' alt="Photo sent with the report">' : '') +
++          (c.resolutionProofUrl ? '<h3 class="sub-h">Photo of the finished work</h3><img class="photo" ' + U.src(c.resolutionProofUrl) + ' alt="Photo of the finished work">' : '') +
+           '<p class="more">' + btn({ label: 'Open the public report page', href: '#/c/' + c.id, kind: 'quiet', small: true }) + '</p>') +
+         sec('Moderation', '<dl class="facts"><div><dt>Moderation status</dt><dd>' + esc(S.MOD_LABELS[ms]) + '</dd></div><div><dt>Flags</dt><dd>' + c.flagCount + (reasonText ? ' · ' + esc(reasonText) : '') + '</dd></div></dl>' +
+           '<h3 class="sub-h">Who flagged it and why</h3>' + flagList + '<h3 class="sub-h">Earlier moderation</h3>' + modLog + '<h3 class="sub-h">Reporter standing</h3>' + (trust || '<p class="muted">Not available.</p>')) +
+@@ -225,18 +225,18 @@
+         sec('Progress', U.timeline(c))),
+       mount: function (root) {
+         var on = function (id, fn) { var b = root.querySelector(id); if (b) b.addEventListener('click', fn); };
+-        on('#m-keep', function () { reasonDialog({ title: 'Keep this report', text: 'The report is legitimate. Flags stay on record, but the report returns to normal.', confirm: 'Keep report', prefill: 'Checked: the report is legitimate.', run: function (r) { S.keepReport(c.id, r); }, done: 'Report cleared.' }); });
+-        on('#m-review', function () { reasonDialog({ title: 'Mark under review', text: 'It will be hidden from the public list and from officials until you decide. The reporter is told it is being checked.', confirm: 'Mark under review', run: function (r) { S.markUnderReview(c.id, r); }, done: 'Marked under review.' }); });
++        on('#m-keep', function () { reasonDialog({ title: 'Keep this report', text: 'The report is legitimate. Flags stay on record, but the report returns to normal.', confirm: 'Keep report', prefill: 'Checked: the report is legitimate.', run: function (r) { return S.keepReport(c.id, r); }, done: 'Report cleared.' }); });
++        on('#m-review', function () { reasonDialog({ title: 'Mark under review', text: 'It will be hidden from the public list and from officials until you decide. The reporter is told it is being checked.', confirm: 'Mark under review', run: function (r) { return S.markUnderReview(c.id, r); }, done: 'Marked under review.' }); });
+         on('#m-reject', function () { openReject(c); });
+         on('#m-dup', function () { openDuplicate(c); });
+-        on('#m-arch', function () { reasonDialog({ title: 'Remove or archive', text: 'The report leaves the active workload and statistics and is kept in the record. The reporter is told. This does not lower their trust.', confirm: 'Archive report', run: function (r) { S.archiveReport(c.id, r); }, done: 'Report archived.' }); });
++        on('#m-arch', function () { reasonDialog({ title: 'Remove or archive', text: 'The report leaves the active workload and statistics and is kept in the record. The reporter is told. This does not lower their trust.', confirm: 'Archive report', run: function (r) { return S.archiveReport(c.id, r); }, done: 'Report archived.' }); });
+         on('#m-loc', function () {
+           var cur = c.locationPrivacy || 'approximate';
+           reasonDialog({ title: 'Map privacy for this report', text: 'Officials and admins always see the exact spot. This changes only what the public map shows.', confirm: 'Save',
+             extra: '<fieldset class="radios"><legend>The public map shows</legend>' + [['approximate', 'The general area (recommended)'], ['hidden', 'Nothing: hide it from the public map'], ['exact', 'The exact spot (only for public places)']].map(function (o) { return '<label class="radio"><input type="radio" name="lp" value="' + o[0] + '"' + (o[0] === cur ? ' checked' : '') + '><span>' + o[1] + '</span></label>'; }).join('') + '</fieldset>',
+-            run: function (r, root) { S.setLocationPrivacy(c.id, root.querySelector('input[name=lp]:checked').value, r); }, done: 'Map privacy updated.' });
++            run: function (r, root) { return S.setLocationPrivacy(c.id, root.querySelector('input[name=lp]:checked').value, r); }, done: 'Map privacy updated.' });
+         });
+-        on('#m-restore', function () { reasonDialog({ title: 'Restore this report', text: 'It becomes a normal active report again.', confirm: 'Restore report', run: function (r) { S.restoreReport(c.id, r); }, done: 'Report restored.' }); });
++        on('#m-restore', function () { reasonDialog({ title: 'Restore this report', text: 'It becomes a normal active report again.', confirm: 'Restore report', run: function (r) { return S.restoreReport(c.id, r); }, done: 'Report restored.' }); });
+         on('#u-warn', function () { openUserAction('warn', ru); });
+         on('#u-susp', function () { openUserAction('suspend', ru); });
+       }
+@@ -293,11 +293,11 @@
+         sec('History', '<ul class="loglist">' + v.history.map(function (h) { return '<li><strong>' + esc((VERIF_LABEL[h.status] || [h.status])[0]) + '</strong> · ' + esc(h.by) + '<span class="muted"> · ' + U.dateTime(h.ts) + '</span>' + (h.note ? '<p>' + esc(h.note) + '</p>' : '') + '</li>'; }).join('') + '</ul>')),
+       mount: function (root) {
+         var on = function (id, fn) { var b = root.querySelector(id); if (b) b.addEventListener('click', fn); };
+-        on('#a-ok', function () { reasonDialog({ title: 'Approve this official', text: 'They can open the desk for ' + u.department + ' and work on its reports.', confirm: 'Approve', prefill: 'ID checked.', run: function (r) { S.approveAuthority(u.id, r); }, done: 'Official approved.' }); });
+-        on('#a-no', function () { reasonDialog({ title: 'Do not approve', text: 'They will not be able to do official work. They will see your reason.', confirm: 'Reject application', danger: true, reasonLabel: 'Reason the official will see', run: function (r) { S.rejectAuthority(u.id, r); }, done: 'Application rejected.' }); });
+-        on('#a-info', function () { reasonDialog({ title: 'Ask for more information', text: 'The official sees your question and can reply.', confirm: 'Send request', reasonLabel: 'What do you need?', hint: 'Be specific, for example: please send your ID number.', run: function (r) { S.requestInfo(u.id, r); }, done: 'Request sent.' }); });
+-        on('#a-susp', function () { reasonDialog({ title: 'Revoke official access', text: 'They will not be able to do official work until you restore access. Reports they started stay as they are.', confirm: 'Revoke access', danger: true, run: function (r) { S.suspendAuthority(u.id, r); }, done: 'Access revoked.' }); });
+-        on('#a-re', function () { reasonDialog({ title: 'Restore official access', confirm: 'Restore access', run: function (r) { S.reinstateAuthority(u.id, r); }, done: 'Access restored.' }); });
++        on('#a-ok', function () { reasonDialog({ title: 'Approve this official', text: 'They can open the desk for ' + u.department + ' and work on its reports.', confirm: 'Approve', prefill: 'ID checked.', run: function (r) { return S.approveAuthority(u.id, r); }, done: 'Official approved.' }); });
++        on('#a-no', function () { reasonDialog({ title: 'Do not approve', text: 'They will not be able to do official work. They will see your reason.', confirm: 'Reject application', danger: true, reasonLabel: 'Reason the official will see', run: function (r) { return S.rejectAuthority(u.id, r); }, done: 'Application rejected.' }); });
++        on('#a-info', function () { reasonDialog({ title: 'Ask for more information', text: 'The official sees your question and can reply.', confirm: 'Send request', reasonLabel: 'What do you need?', hint: 'Be specific, for example: please send your ID number.', run: function (r) { return S.requestInfo(u.id, r); }, done: 'Request sent.' }); });
++        on('#a-susp', function () { reasonDialog({ title: 'Revoke official access', text: 'They will not be able to do official work until you restore access. Reports they started stay as they are.', confirm: 'Revoke access', danger: true, run: function (r) { return S.suspendAuthority(u.id, r); }, done: 'Access revoked.' }); });
++        on('#a-re', function () { reasonDialog({ title: 'Restore official access', confirm: 'Restore access', run: function (r) { return S.reinstateAuthority(u.id, r); }, done: 'Access restored.' }); });
+       }
+     };
+   });
+@@ -352,7 +352,7 @@
+       extra: U.field({ id: 'dp-n', label: 'Name', required: true, value: d.name }) + U.field({ id: 'dp-d', label: 'What it handles', tag: 'textarea', rows: 2, value: d.description }) +
+         U.field({ id: 'dp-r', label: 'Responsible roles', value: d.roles.join(', '), hint: 'Separate with commas, for example: Ward Officer, District Officer.' }) +
+         '<label class="check"><input type="checkbox" id="dp-a"' + (d.active ? ' checked' : '') + '><span><strong>Active</strong><br><span class="muted">Inactive departments cannot get new reports or transfers.</span></span></label>',
+-      run: function (reason, root) { S.saveDepartment({ id: d.id, name: root.querySelector('#dp-n').value, description: root.querySelector('#dp-d').value, active: root.querySelector('#dp-a').checked, roles: root.querySelector('#dp-r').value.split(','), reason: reason }); },
++      run: function (reason, root) { return S.saveDepartment({ id: d.id, name: root.querySelector('#dp-n').value, description: root.querySelector('#dp-d').value, active: root.querySelector('#dp-a').checked, roles: root.querySelector('#dp-r').value.split(','), reason: reason }); },
+       done: isNew ? 'Department added.' : 'Department saved.' });
+   }
+   var departments = A(function () {
+@@ -370,8 +370,9 @@
+         root.querySelectorAll('[data-edit]').forEach(function (b) { b.addEventListener('click', function () { openDept(S.departments().filter(function (d) { return d.id === b.getAttribute('data-edit'); })[0]); }); });
+         S.CATS.forEach(function (c) {
+           root.querySelector('#rt-' + c.id).addEventListener('change', function (e) {
+-            try { S.setCategoryDept(c.id, e.target.value); U.toast('Saved. New "' + c.name + '" reports go to ' + S.deptName(e.target.value) + '.', 'good'); }
+-            catch (ex) { U.toast(friendly(ex, 'Could not save.'), 'bad'); rerender(); }
++            var dv = e.target.value;
++            U.attempt(function () { return S.setCategoryDept(c.id, dv); }).then(function () { U.toast('Saved. New "' + c.name + '" reports go to ' + S.deptName(dv) + '.', 'good'); })
++              .catch(function (ex) { U.toast(friendly(ex, 'Could not save.'), 'bad'); rerender(); });
+           });
+         });
+       }
+@@ -428,8 +429,8 @@
+         root.querySelector('#st').addEventListener('submit', function (e) {
+           e.preventDefault(); U.clearErrors(root);
+           var go = root.querySelector('#st-go'); U.setBusy(go, true, 'Saving…');
+-          try { S.saveSettings({ reviewThreshold: root.querySelector('#st-rt').value, flagsPerDay: root.querySelector('#st-fd').value, reportsPerHour: root.querySelector('#st-rh').value, auditDays: root.querySelector('#st-ad').value, maxReopens: root.querySelector('#st-mr').value, publicGridMeters: root.querySelector('#st-gm').value, areaLevel: root.querySelector('#st-al').value, mapTiles: root.querySelector('#st-tl').checked }); U.setBusy(go, false); U.toast('Settings saved', 'good'); }
+-          catch (ex) { U.setBusy(go, false); root.querySelector('#st-alert').innerHTML = alertBox('danger', '<strong>Not saved</strong><p>' + esc(friendly(ex, 'Could not save.')) + '</p>'); }
++          U.attempt(function () { return S.saveSettings({ reviewThreshold: root.querySelector('#st-rt').value, flagsPerDay: root.querySelector('#st-fd').value, reportsPerHour: root.querySelector('#st-rh').value, auditDays: root.querySelector('#st-ad').value, maxReopens: root.querySelector('#st-mr').value, publicGridMeters: root.querySelector('#st-gm').value, areaLevel: root.querySelector('#st-al').value, mapTiles: root.querySelector('#st-tl').checked }); }).then(function () { U.setBusy(go, false); U.toast('Settings saved', 'good'); })
++            .catch(function (ex) { U.setBusy(go, false); root.querySelector('#st-alert').innerHTML = alertBox('danger', '<strong>Not saved</strong><p>' + esc(friendly(ex, 'Could not save.')) + '</p>'); });
+         });
+       }
+     };
